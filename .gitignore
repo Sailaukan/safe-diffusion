@@ -1,0 +1,41 @@
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+/.venv/
+/venv/
+
+# Local secrets/config
+.env
+.env.*
+
+# Experiment outputs
+wandb/
+logs/
+outputs/
+multirun/
+checkpoints/
+ckpt/
+watch_folder/
+slurm-*.out
+*.log
+
+# Large generated model artifacts
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+
+# Notebook state
+.ipynb_checkpoints/

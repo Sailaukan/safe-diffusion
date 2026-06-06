@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Local training/evaluation artifacts
+ckpt/
+logs/
+wandb/
+outputs/
+*.log
+*.out
+*.err
+DENOVO_*_VS_*.md
+*_SWEEP_PLAN.md
+*_SWEEP_REPORT.md
+
+# Tooling caches and local editor/agent state
+.cache/
+.pytest_cache/
+.hydra/
+.claude/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST

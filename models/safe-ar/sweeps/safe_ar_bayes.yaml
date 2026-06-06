@@ -1,0 +1,60 @@
+name: safe-ar-bayes-stage1
+project: safe-ar-sweeps
+program: scripts/train.py
+method: bayes
+metric:
+  name: train_loss_ema
+  goal: minimize
+run_cap: 32
+early_terminate:
+  type: hyperband
+  min_iter: 250
+parameters:
+  data:
+    value: safe
+  wandb.project:
+    value: safe-ar-sweeps
+  trainer.devices:
+    value: 1
+  loader.global_batch_size:
+    value: 256
+  loader.batch_size:
+    value: 16
+  trainer.accumulate_grad_batches:
+    value: 16
+  loader.num_workers:
+    value: 4
+  trainer.max_steps:
+    value: 50000
+  callback.every_n_train_steps:
+    value: 2500
+  training.global_mean_loss:
+    value: true
+  training.use_bracket_safe:
+    value: false
+  training.loss_ema_decay:
+    value: 0.98
+  optim.lr:
+    distribution: log_uniform_values
+    min: !!float 1e-4
+    max: !!float 6e-4
+  optim.warmup_steps:
+    values: [1000, 2500, 5000]
+  optim.weight_decay:
+    values: [0.0, 0.01, 0.05]
+  optim.beta2:
+    values: [0.98, 0.999]
+  trainer.gradient_clip_val:
+    values: [0.5, 1.0, 2.0]
+  training.ema:
+    values: [0.999, 0.9995, 0.9999]
+  model.hidden_dropout_prob:
+    values: [0.0, 0.1, 0.2]
+command:
+  - ${env}
+  - python
+  - -m
+  - torch.distributed.run
+  - --nproc_per_node=1
+  - ${program}
+  - ${args_no_hyphens}

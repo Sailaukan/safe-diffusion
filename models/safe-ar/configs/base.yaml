@@ -1,0 +1,86 @@
+hydra:
+  run:
+    dir: ${hydra_run_dir:ckpt/tmp}
+  job:
+    chdir: True
+
+data: safe
+
+wandb:
+  project: safe-ar
+  name: null
+
+loader:
+  global_batch_size: 256
+  batch_size: 16
+  num_workers: 32
+  pin_memory: True
+
+optim:
+  weight_decay: 0
+  lr: 3e-4
+  warmup_steps: 2500
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1e-8
+
+trainer:
+  _target_: lightning.Trainer
+  accelerator: cuda
+  num_nodes: 1
+  devices: ${device_count:}
+  accumulate_grad_batches: ${div_up:${loader.global_batch_size}, ${eval:${trainer.devices} * ${loader.batch_size} * ${trainer.num_nodes}}}
+  gradient_clip_val: 1.0
+  precision: 'bf16'
+  max_steps: 50000
+  log_every_n_steps: 10
+
+model:
+  model_type: safe-ar
+  vocab_size: 1880
+  pad_token_id: 3
+  max_position_embeddings: 256
+  length: 256
+  hidden_size: 768
+  intermediate_size: 3072
+  num_attention_heads: 12
+  num_hidden_layers: 12
+  n_heads: 12
+  n_blocks: 12
+  hidden_act: gelu
+  hidden_dropout_prob: 0.1
+  attention_probs_dropout_prob: 0.1
+  dropout: 0.1
+  layer_norm_eps: 1e-5
+  initializer_range: 0.02
+  tie_word_embeddings: False
+  time_conditioning: False
+  torch_dtype: float32
+
+diffusion:
+  engine: ar
+  parameterization: ar
+
+sampling:
+  batch_size: 64
+  temperature: 0.8
+  randomness: 1.0
+  top_k: null
+  min_new_tokens: 0
+  ban_special_tokens: True
+
+training:
+  ema: 0.9999
+  loss_ema_decay: 0.98
+  log_grad_norm: True
+  global_mean_loss: True
+  use_bracket_safe: False
+
+callback:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: ${cwd:}/checkpoints
+  filename: '{step}'
+  save_top_k: -1
+  auto_insert_metric_name: False
+  enable_version_counter: False
+  every_n_train_steps: 5000

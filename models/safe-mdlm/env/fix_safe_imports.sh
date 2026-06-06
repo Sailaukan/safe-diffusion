@@ -1,0 +1,48 @@
+#!/bin/bash
+
+if [ -z "$CONDA_PREFIX" ]; then
+    echo "Error: No conda environment is currently active"
+    exit 1
+fi
+
+SAFE_INIT=$(python - <<'PY'
+import os
+import sysconfig
+print(os.path.join(sysconfig.get_paths()["purelib"], "safe", "__init__.py"))
+PY
+)
+
+if [ ! -f "$SAFE_INIT" ]; then
+    echo "Error: Could not find safe package __init__.py at $SAFE_INIT"
+    exit 1
+fi
+
+cp "$SAFE_INIT" "${SAFE_INIT}.bak"
+cat > "$SAFE_INIT" <<'EOF'
+from ._exception import SAFEDecodeError, SAFEEncodeError, SAFEFragmentationError
+from .converter import SAFEConverter, decode, encode
+from .tokenizer import SAFETokenizer, split
+EOF
+
+echo "Fixed safe package in environment: $CONDA_PREFIX"
+echo "Patched file: $SAFE_INIT"
+
+# This is to fix the following error with SAFE due to the new version of transformers
+
+#   File "genmol/scripts/train.py", line 23, in <module>
+#     from genmol.model import GenMol
+#   File "genmol/src/genmol/model.py", line 29, in <module>
+#     from genmol.utils.utils_data import get_tokenizer
+#   File "genmol/src/genmol/utils/utils_data.py", line 20, in <module>
+#     from safe.tokenizer import SAFETokenizer
+#   File "<conda-env>/lib/python3.10/site-packages/safe/__init__.py", line 4, in <module>
+#     from .sample import SAFEDesign
+#   File "<conda-env>/lib/python3.10/site-packages/safe/sample.py", line 21, in <module>
+#     from safe.trainer.model import SAFEDoubleHeadsModel
+#   File "<conda-env>/lib/python3.10/site-packages/safe/trainer/__init__.py", line 2, in <module>
+#     from . import model
+#   File "<conda-env>/lib/python3.10/site-packages/safe/trainer/model.py", line 8, in <module>
+#     from transformers.models.gpt2.modeling_gpt2 import (
+# ImportError: cannot import name '_CONFIG_FOR_DOC' from 'transformers.models.gpt2.modeling_gpt2' (<conda-env>/lib/python3.10/site-packages/transformers/models/gpt2/modeling_gpt2.py)
+# E0612 11:30:42.845000 3315425 site-packages/torch/distributed/elastic/multiprocessing/api.py:869] failed (exitcode: 1) local_rank: 0 (pid: 3315490) of binary: <conda-env>/bin/python
+# Traceback (most recent call last):

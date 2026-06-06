@@ -78,6 +78,9 @@ _register_resolvers()
     config_name="base",
 )
 def train(config):
+    if config.get('seed') is not None:
+        L.seed_everything(int(config.seed), workers=True)
+
     wandb_logger = _build_wandb_logger(config)
 
     if config.training.get('use_bracket_safe'):

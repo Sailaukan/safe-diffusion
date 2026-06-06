@@ -27,6 +27,7 @@ RDLogger.DisableLog('rdApp.*')
 
 
 TEXT_COLUMNS = ('input', 'safe', 'text', 'inputs', 'sequence')
+SAFE_GPT_REVISION = os.environ.get('SAFE_GPT_REVISION', 'b83175cd7394')
 
 
 def _checkpoint_step(filename: str) -> int | None:
@@ -53,7 +54,10 @@ def get_last_checkpoint(save_dir):
 
 
 def get_tokenizer():
-    tokenizer = SAFETokenizer.from_pretrained('datamol-io/safe-gpt').get_pretrained()
+    tokenizer = SAFETokenizer.from_pretrained(
+        'datamol-io/safe-gpt',
+        revision=SAFE_GPT_REVISION,
+    ).get_pretrained()
     tokenizer.add_tokens(['<', '>'])   # for bracket_safe
     return tokenizer
 
@@ -121,7 +125,12 @@ def get_dataloader(config):
     loader_kwargs = _common_loader_kwargs(config)
     if config.data == 'safe':
         return torch.utils.data.DataLoader(
-            datasets.load_dataset('datamol-io/safe-gpt', streaming=True, split='train'),
+            datasets.load_dataset(
+                'datamol-io/safe-gpt',
+                streaming=True,
+                split='train',
+                revision=SAFE_GPT_REVISION,
+            ),
             shuffle=False,  # streaming
             **loader_kwargs,
         )

@@ -154,6 +154,53 @@ def test_safe_gpt_v1_streaming_batch_shape():
   assert batch['attention_mask'].shape == (2, 256)
 
 
+def test_train_start_keeps_iterable_dataloader():
+  import lightning as L
+  import trainer_base
+
+  class TinyIterableDataset(torch.utils.data.IterableDataset):
+    def __iter__(self):
+      for idx in range(2):
+        yield {
+          'input_ids': torch.tensor([idx]),
+          'attention_mask': torch.tensor([1]),
+        }
+
+  class CombinedLoader:
+    def __init__(self, flattened):
+      self.flattened = flattened
+
+  class FitLoop:
+    def __init__(self, loader):
+      self._combined_loader = CombinedLoader([loader])
+
+  class AcceleratorConnector:
+    use_distributed_sampler = False
+    is_distributed = False
+
+  class Trainer:
+    def __init__(self, loader):
+      self.fit_loop = FitLoop(loader)
+      self._accelerator_connector = AcceleratorConnector()
+
+  loader = torch.utils.data.DataLoader(
+    TinyIterableDataset(),
+    batch_size=1,
+    num_workers=0)
+  model = object.__new__(trainer_base.TrainerBase)
+  L.LightningModule.__init__(model)
+  model.ema = None
+  model.trainer = Trainer(loader)
+  model.config = _Section(loader=_Section(
+    batch_size=1,
+    num_workers=0,
+    pin_memory=False))
+
+  trainer_base.TrainerBase.on_train_start(model)
+
+  assert model.trainer.fit_loop._combined_loader.flattened == [loader]
+
+
 def test_generation_metrics_diversity_keeps_valid_duplicates():
   pytest.importorskip('rdkit')
   import molecule_utils

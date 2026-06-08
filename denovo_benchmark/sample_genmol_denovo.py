@@ -60,6 +60,50 @@ def _load_model(model_name: str, checkpoint: Path, device: torch.device):
     return model
 
 
+def _sample_legacy_repaired_smiles(checkpoint: Path, args) -> list[str]:
+    from genmol.sampler import Sampler
+
+    sampler = Sampler(str(checkpoint))
+    if hasattr(sampler.model, "diffusion"):
+        sampler.model.diffusion.sampling_steps = int(args.steps)
+    smiles = []
+    remaining = int(args.num_samples)
+    while remaining > 0:
+        batch_size = min(int(args.batch_size), remaining)
+        smiles.extend(
+            sampler.de_novo_generation(
+                num_samples=batch_size,
+                softmax_temp=args.temperature,
+                randomness=args.randomness,
+                min_add_len=args.min_add_len,
+                max_length=args.max_length,
+                top_k=args.top_k,
+                fix=True,
+            )
+        )
+        remaining -= batch_size
+    return smiles[: int(args.num_samples)]
+
+
+def _pad_dropped_samples(records: list, target_count: int, molecule_utils) -> list:
+    missing = target_count - len(records)
+    if missing <= 0:
+        return records[:target_count]
+    records.extend(
+        molecule_utils.MoleculeEvaluation(
+            source=None,
+            smiles=None,
+            canonical_smiles=None,
+            valid=False,
+            qed=None,
+            sa=None,
+            quality=False,
+        )
+        for _ in range(missing)
+    )
+    return records
+
+
 def _max_length(model) -> int:
     return int(
         model.config.model.get(
@@ -265,41 +309,19 @@ def main() -> None:
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
 
-    device = _device(args.device)
-    model = _load_model(args.model, checkpoint, device)
-
-    token_ids = []
-    safe_strings = []
-    remaining = int(args.num_samples)
-    while remaining > 0:
-        batch_size = min(int(args.batch_size), remaining)
-        if args.model == "safe-ar":
-            batch = _sample_ar_batch(model, batch_size, args)
-        else:
-            batch = _sample_diffusion_batch(model, model_dir, batch_size, args)
-        batch_ids = batch.detach().cpu().tolist()
-        token_ids.extend(batch_ids)
-        safe_strings.extend(
-            molecule_utils.decode_token_batch_to_safe(batch_ids, model.tokenizer)
-        )
-        remaining -= batch_size
-
+    smiles = _sample_legacy_repaired_smiles(checkpoint, args)
     records = molecule_utils.evaluate_molecules(
-        safe_strings=safe_strings,
+        smiles=smiles,
         qed_threshold=args.qed_threshold,
         sa_threshold=args.sa_threshold,
     )
-    token_diagnostics = molecule_utils.token_decode_summary(
-        token_ids,
-        model.tokenizer,
-        records,
-    )
+    records = _pad_dropped_samples(records, int(args.num_samples), molecule_utils)
     summary = {
         "task": "denovo",
         "model": args.model,
         "checkpoint": str(checkpoint),
         "metrics": molecule_utils.generation_metrics(records),
-        "token_diagnostics": token_diagnostics,
+        "token_diagnostics": {},
         "sampling": {
             "num_samples": args.num_samples,
             "batch_size": args.batch_size,
@@ -309,21 +331,23 @@ def main() -> None:
             "min_add_len": args.min_add_len,
             "length_mode": args.length_mode,
             "seed": args.seed,
+            "sampler": "genmol.sampler.Sampler.de_novo_generation",
+            "repair_fragments": True,
+            "num_repaired_smiles": len(smiles),
+            "num_dropped_by_sampler": int(args.num_samples) - len(smiles),
         },
     }
     molecule_utils.write_json(summary, args.output)
 
     if args.records_output:
         rows = []
-        for safe_string, token_row, record in zip(safe_strings, token_ids, records):
+        for record in records:
             row = record.to_dict()
-            row["safe"] = safe_string
-            row["raw_token_ids"] = json.dumps(token_row)
-            row.update(molecule_utils.token_decode_metadata(token_row, model.tokenizer))
+            row["safe"] = ""
+            row["raw_token_ids"] = ""
             rows.append(row)
         _write_records_csv(rows, Path(args.records_output))
 
 
 if __name__ == "__main__":
     main()
-

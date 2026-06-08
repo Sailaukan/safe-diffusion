@@ -6,8 +6,18 @@ BENCHMARK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${BENCHMARK_DIR}/.." && pwd)"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
+COLLECT_PYTHON_BIN="${COLLECT_PYTHON_BIN:-${PYTHON_BIN}}"
 RUN_ROOT="${RUN_ROOT:-${BENCHMARK_DIR}/runs}"
 DATA_CACHE_DIR="${DATA_CACHE_DIR:-/tmp/data}"
+
+# Keep user-level packages out of benchmark jobs by default. In particular,
+# a stale ~/.local torchvision can be discovered ahead of the conda env and
+# crash transformers imports with missing torchvision C++ operators.
+if [[ "${ALLOW_PYTHON_USER_SITE:-0}" == "1" ]]; then
+  unset PYTHONNOUSERSITE
+else
+  export PYTHONNOUSERSITE="${PYTHONNOUSERSITE:-1}"
+fi
 
 SAFE_GPT_REVISION="${SAFE_GPT_REVISION:-b83175cd7394}"
 SEED="${SEED:-1}"
@@ -15,7 +25,7 @@ SEED="${SEED:-1}"
 MAX_STEPS="${MAX_STEPS:-10000}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-256}"
 MICRO_BATCH_SIZE="${MICRO_BATCH_SIZE:-16}"
-NUM_WORKERS="${NUM_WORKERS:-32}"
+NUM_WORKERS="${NUM_WORKERS:-12}"
 CHECKPOINT_INTERVAL="${CHECKPOINT_INTERVAL:-5000}"
 LOG_EVERY_N_STEPS="${LOG_EVERY_N_STEPS:-10}"
 RESUME="${RESUME:-0}"
@@ -37,6 +47,27 @@ model_dir() {
   case "$1" in
     safe-ar|safe-mdlm|safe-udlm|safe-duo)
       printf '%s/models/%s\n' "${REPO_ROOT}" "$1"
+      ;;
+    *)
+      printf 'Unknown model: %s\n' "$1" >&2
+      return 2
+      ;;
+  esac
+}
+
+python_bin_for_model() {
+  case "$1" in
+    safe-ar)
+      printf '%s\n' "${SAFE_AR_PYTHON_BIN:-${PYTHON_BIN}}"
+      ;;
+    safe-mdlm)
+      printf '%s\n' "${SAFE_MDLM_PYTHON_BIN:-${PYTHON_BIN}}"
+      ;;
+    safe-udlm)
+      printf '%s\n' "${SAFE_UDLM_PYTHON_BIN:-${PYTHON_BIN}}"
+      ;;
+    safe-duo)
+      printf '%s\n' "${SAFE_DUO_PYTHON_BIN:-${PYTHON_BIN}}"
       ;;
     *)
       printf 'Unknown model: %s\n' "$1" >&2
